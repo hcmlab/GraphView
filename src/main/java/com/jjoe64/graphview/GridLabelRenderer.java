@@ -110,6 +110,12 @@ public class GridLabelRenderer {
          * font color of the horizontal axis title
          */
         public int horizontalAxisTitleColor;
+        
+        /**
+         * angle of the horizontal axis label in 
+         * degrees between 0 and 180
+         */
+        public float horizontalLabelsAngle;
 
         /**
          * flag whether the horizontal labels are
@@ -138,7 +144,26 @@ public class GridLabelRenderer {
      * Definition which lines will be drawn in the background
      */
     public enum GridStyle {
-        BOTH, VERTICAL, HORIZONTAL, NONE;
+        /**
+         * show vertical and horizonal lines
+         * this is the default
+         */
+        BOTH,
+
+        /**
+         * show only vertical lines
+         */
+        VERTICAL,
+
+        /**
+         * show only horizontal lines
+         */
+        HORIZONTAL,
+
+        /**
+         * dont draw any lines
+         */
+        NONE;
 
         public boolean drawVertical() { return this == BOTH || this == VERTICAL && this != NONE; }
         public boolean drawHorizontal() { return this == BOTH || this == HORIZONTAL && this != NONE; }
@@ -348,6 +373,8 @@ public class GridLabelRenderer {
 
         mStyles.horizontalLabelsVisible = true;
         mStyles.verticalLabelsVisible = true;
+        
+        mStyles.horizontalLabelsAngle = 0f;
 
         mStyles.gridStyle = GridStyle.BOTH;
 
@@ -426,6 +453,13 @@ public class GridLabelRenderer {
      */
     public int getHorizontalLabelsColor() {
         return mStyles.horizontalLabelsColor;
+    }
+    
+    /**
+     * @return the angle of the horizontal labels
+     */
+    public float getHorizontalLabelsAngle() {
+        return mStyles.horizontalLabelsAngle;
     }
 
     /**
@@ -665,7 +699,6 @@ public class GridLabelRenderer {
                 i++;
             }
             double oldSteps = d2 - d1;
-            Log.d("GridLabelRenderer", "oldSteps=" + oldSteps);
             if (oldSteps > 0) {
                 double newSteps = Double.NaN;
 
@@ -850,6 +883,16 @@ public class GridLabelRenderer {
             mLabelHorizontalHeight = (int) Math.max(mLabelHorizontalHeight, mStyles.textSize);
         }
 
+        if (mStyles.horizontalLabelsAngle > 0f && mStyles.horizontalLabelsAngle <= 180f) {
+            int adjHorizontalHeightH = (int) Math.round(Math.abs(mLabelHorizontalHeight*Math.cos(Math.toRadians(mStyles.horizontalLabelsAngle))));
+            int adjHorizontalHeightW = (int) Math.round(Math.abs(mLabelHorizontalWidth*Math.sin(Math.toRadians(mStyles.horizontalLabelsAngle))));
+            int adjHorizontalWidthH = (int) Math.round(Math.abs(mLabelHorizontalHeight*Math.sin(Math.toRadians(mStyles.horizontalLabelsAngle))));
+            int adjHorizontalWidthW = (int) Math.round(Math.abs(mLabelHorizontalWidth*Math.cos(Math.toRadians(mStyles.horizontalLabelsAngle))));
+
+            mLabelHorizontalHeight = adjHorizontalHeightH + adjHorizontalHeightW;
+            mLabelHorizontalWidth = adjHorizontalWidthH + adjHorizontalWidthW;
+        }
+
         // space between text and graph content
         mLabelHorizontalHeight += mStyles.labelsSpace;
     }
@@ -978,11 +1021,19 @@ public class GridLabelRenderer {
 
             // draw label
             if (isHorizontalLabelsVisible()) {
-                mPaintLabel.setTextAlign(Paint.Align.CENTER);
-                if (i == mStepsHorizontal.size() - 1)
-                    mPaintLabel.setTextAlign(Paint.Align.RIGHT);
-                if (i == 0)
-                    mPaintLabel.setTextAlign(Paint.Align.LEFT);
+                if (mStyles.horizontalLabelsAngle > 0f && mStyles.horizontalLabelsAngle <= 180f) {
+                    if (mStyles.horizontalLabelsAngle < 90f) {
+                        mPaintLabel.setTextAlign((Paint.Align.RIGHT));
+                    } else if (mStyles.horizontalLabelsAngle <= 180f) {
+                        mPaintLabel.setTextAlign((Paint.Align.LEFT));
+                    }
+                } else {
+                    mPaintLabel.setTextAlign(Paint.Align.CENTER);
+                    if (i == mStepsHorizontal.size() - 1)
+                        mPaintLabel.setTextAlign(Paint.Align.RIGHT);
+                    if (i == 0)
+                        mPaintLabel.setTextAlign(Paint.Align.LEFT);
+                }
 
                 // multiline labels
                 String label = mLabelFormatter.formatLabel(e.getValue(), true);
@@ -990,10 +1041,31 @@ public class GridLabelRenderer {
                     label = "";
                 }
                 String[] lines = label.split("\n");
+                
+                // If labels are angled, calculate adjustment to line them up with the grid
+                int labelWidthAdj = 0;
+                if (mStyles.horizontalLabelsAngle > 0f && mStyles.horizontalLabelsAngle <= 180f) {
+                    Rect textBounds = new Rect();
+                    mPaintLabel.getTextBounds(lines[0], 0, lines[0].length(), textBounds);
+                    labelWidthAdj = (int) Math.abs(textBounds.width()*Math.cos(Math.toRadians(mStyles.horizontalLabelsAngle)));
+                }
                 for (int li = 0; li < lines.length; li++) {
                     // for the last line y = height
                     float y = (canvas.getHeight() - mStyles.padding - getHorizontalAxisTitleHeight()) - (lines.length - li - 1) * getTextSize() * 1.1f + mStyles.labelsSpace;
-                    canvas.drawText(lines[li], mGraphView.getGraphContentLeft()+e.getKey(), y, mPaintLabel);
+                    float x = mGraphView.getGraphContentLeft()+e.getKey();
+                    if (mStyles.horizontalLabelsAngle > 0 && mStyles.horizontalLabelsAngle < 90f) {
+                        canvas.save();
+                        canvas.rotate(mStyles.horizontalLabelsAngle, x + labelWidthAdj, y);
+                        canvas.drawText(lines[li], x + labelWidthAdj, y, mPaintLabel);
+                        canvas.restore();
+                    } else if (mStyles.horizontalLabelsAngle > 0 && mStyles.horizontalLabelsAngle <= 180f) {
+                        canvas.save();
+                        canvas.rotate(mStyles.horizontalLabelsAngle - 180f, x - labelWidthAdj, y);
+                        canvas.drawText(lines[li], x - labelWidthAdj, y, mPaintLabel);
+                        canvas.restore();
+                    } else {
+                        canvas.drawText(lines[li], x, y, mPaintLabel);
+                    }
                 }
             }
             i++;
@@ -1101,11 +1173,11 @@ public class GridLabelRenderer {
     protected double humanRound(double in, boolean roundAlwaysUp) {
         // round-up to 1-steps, 2-steps or 5-steps
         int ten = 0;
-        while (in >= 10d) {
+        while (Math.abs(in) >= 10d) {
             in /= 10d;
             ten++;
         }
-        while (in < 1d) {
+        while (Math.abs(in) < 1d) {
             in *= 10d;
             ten--;
         }
@@ -1208,6 +1280,7 @@ public class GridLabelRenderer {
      */
     public void setTextSize(float textSize) {
         mStyles.textSize = textSize;
+        reloadStyles();
     }
 
     /**
@@ -1230,12 +1303,20 @@ public class GridLabelRenderer {
     public void setHorizontalLabelsColor(int horizontalLabelsColor) {
         mStyles.horizontalLabelsColor = horizontalLabelsColor;
     }
+    
+    /**
+     * @param horizontalLabelsAngle the angle of the horizontal labels in degrees
+     */
+    public void setHorizontalLabelsAngle(int horizontalLabelsAngle) {
+        mStyles.horizontalLabelsAngle = horizontalLabelsAngle;
+    }
 
     /**
      * @param gridColor the color of the grid lines
      */
     public void setGridColor(int gridColor) {
         mStyles.gridColor = gridColor;
+        reloadStyles();
     }
 
     /**
