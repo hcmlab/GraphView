@@ -231,20 +231,30 @@ public class LineGraphSeries<E extends DataPointInterface> extends BaseSeries<E>
                     isOverdraw = true;
                 }
                 if (y < 0) { // end bottom
-                    double b = ((0 - lastEndY) * (x - lastEndX)/(y - lastEndY));
-                    x = lastEndX+b;
+                    if(lastEndY >= 0)
+                    {
+                        double b = ((0 - lastEndY) * (x - lastEndX) / (y - lastEndY));
+                        x = lastEndX + b;
+                    }
                     y = 0;
                     isOverdraw = true;
                 }
                 if (y > graphHeight) { // end top
-                    double b = ((graphHeight - lastEndY) * (x - lastEndX)/(y - lastEndY));
-                    x = lastEndX+b;
+                    if(lastEndY <= graphHeight)
+                    {
+                        double b = ((graphHeight - lastEndY) * (x - lastEndX) / (y - lastEndY));
+                        x = lastEndX + b;
+                    }
                     y = graphHeight;
                     isOverdraw = true;
                 }
+
                 if (lastEndY < 0) { // start bottom
-                    double b = ((0 - y) * (x - lastEndX)/(lastEndY - y));
-                    lastEndX = x-b;
+                    if(y >= 0)
+                    {
+                        double b = ((0 - y) * (x - lastEndX) / (lastEndY - y));
+                        lastEndX = x - b;
+                    }
                     lastEndY = 0;
                     isOverdraw = true;
                 }
@@ -255,8 +265,11 @@ public class LineGraphSeries<E extends DataPointInterface> extends BaseSeries<E>
                     isOverdraw = true;
                 }
                 if (lastEndY > graphHeight) { // start top
-                    double b = ((graphHeight - y) * (x - lastEndX)/(lastEndY - y));
-                    lastEndX = x-b;
+                    if(lastEndY <= graphHeight)
+                    {
+                        double b = ((graphHeight - y) * (x - lastEndX) / (lastEndY - y));
+                        lastEndX = x - b;
+                    }
                     lastEndY = graphHeight;
                     isOverdraw = true;
                 }
