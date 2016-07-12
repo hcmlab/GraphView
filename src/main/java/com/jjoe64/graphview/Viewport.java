@@ -31,7 +31,6 @@ import android.view.MotionEvent;
 import android.view.ScaleGestureDetector;
 import android.widget.OverScroller;
 
-import com.jjoe64.graphview.compat.OverScrollerCompat;
 import com.jjoe64.graphview.series.DataPointInterface;
 import com.jjoe64.graphview.series.Series;
 
@@ -600,7 +599,7 @@ public class Viewport {
             mCurrentViewport.bottom = d;
 
             // highest
-            d = Double.MIN_VALUE;
+            d = -Double.MAX_VALUE;
             for (Series s : series) {
                 Iterator<DataPointInterface> values = s.getValues(mCurrentViewport.left, mCurrentViewport.right);
                 while (values.hasNext()) {
@@ -969,7 +968,7 @@ public class Viewport {
             double size = mCurrentViewport.width();
             mCurrentViewport.right = mCompleteRange.right;
             mCurrentViewport.left = mCompleteRange.right - size;
-            mGraphView.onDataChanged(true, false);
+//            mGraphView.onDataChanged(true, false);
         } else {
             Log.w("GraphView", "scrollToEnd works only with manual x axis bounds");
         }

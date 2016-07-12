@@ -25,7 +25,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.support.v4.view.ViewCompat;
-import android.util.Log;
 import android.util.TypedValue;
 
 import java.util.LinkedHashMap;
@@ -226,9 +225,15 @@ public class GridLabelRenderer {
     protected boolean mIsAdjusted;
 
     /**
-     * the width of the vertical labels
+     * the width of the vertical labels in pixels
      */
     private Integer mLabelVerticalWidth;
+
+    /**
+     * the width of the vertical labels in characters
+     */
+    private Integer mLabelVerticalNumChars;
+
 
     /**
      * indicates if the width was set manually
@@ -250,6 +255,11 @@ public class GridLabelRenderer {
      * of the second scale
      */
     private Integer mLabelVerticalSecondScaleWidth;
+
+    /**
+     * the width of the vertical labels in characters
+     */
+    private Integer mLabelVerticalSecondScaleNumChars;
 
     /**
      * the height of the vertical labels
@@ -486,10 +496,12 @@ public class GridLabelRenderer {
         if (!keepLabelsSize) {
             if (!mLabelVerticalWidthFixed) {
                 mLabelVerticalWidth = null;
+                mLabelVerticalNumChars = null;
             }
             mLabelVerticalHeight = null;
             mLabelVerticalSecondScaleWidth = null;
             mLabelVerticalSecondScaleHeight = null;
+            mLabelVerticalSecondScaleNumChars = null;
         }
         //reloadStyles();
     }
@@ -579,54 +591,87 @@ public class GridLabelRenderer {
         // TODO find the number of labels
         int numVerticalLabels = mNumVerticalLabels;
 
-        double newMinY;
-        double exactSteps;
+        double exactSteps = 0d;
+        double newMinY = minY;
+        double newMaxY = maxY;
 
         if (mGraphView.getViewport().isYAxisBoundsManual()) {
-            newMinY = minY;
             double rangeY = maxY - newMinY;
             exactSteps = rangeY / (numVerticalLabels - 1);
         } else {
             // find good steps
-            boolean adjusting = true;
-            newMinY = minY;
-            exactSteps = 0d;
-            while (adjusting) {
-                double rangeY = maxY - newMinY;
-                exactSteps = rangeY / (numVerticalLabels - 1);
-                exactSteps = humanRound(exactSteps, true);
+            if(minY > 0)
+            {
+                boolean adjusting = true;
+                while (adjusting)
+                {
+                    double rangeY = maxY - newMinY;
+                    exactSteps = rangeY / (numVerticalLabels - 1);
+                    exactSteps = humanRound(exactSteps, true);
 
-                // adjustSteps viewport
-                // wie oft passt STEP in minY rein?
-                int count = 0;
-                if (newMinY >= 0d) {
-                    // positive number
-                    while (newMinY - exactSteps >= 0) {
+                    // adjustSteps viewport
+                    // wie oft passt STEP in minY rein?
+                    int count = 0;
+                    while (newMinY - exactSteps >= 0)
+                    {
                         newMinY -= exactSteps;
                         count++;
                     }
                     newMinY = exactSteps * count;
-                } else {
-                    // negative number
-                    count++;
-                    while (newMinY + exactSteps < 0) {
-                        newMinY += exactSteps;
-                        count++;
+
+                    // wenn minY sich geändert hat, steps nochmal berechnen
+                    // wenn nicht, fertig
+                    if (newMinY == minY)
+                    {
+                        adjusting = false;
+                    } else
+                    {
+                        minY = newMinY;
                     }
-                    newMinY = exactSteps * count * -1;
                 }
 
-                // wenn minY sich geändert hat, steps nochmal berechnen
-                // wenn nicht, fertig
-                if (newMinY == minY) {
-                    adjusting = false;
-                } else {
-                    minY = newMinY;
+                newMaxY = newMinY + (numVerticalLabels - 1) * exactSteps;
+            }
+            else if(maxY < 0)
+            {
+                boolean adjusting = true;
+                while (adjusting)
+                {
+                    double rangeY = newMaxY - minY;
+                    exactSteps = rangeY / (numVerticalLabels - 1);
+                    exactSteps = humanRound(exactSteps, true);
+
+                    // adjustSteps viewport
+                    // wie oft passt STEP in minY rein?
+                    int count = 0;
+                    while (newMaxY + exactSteps <= 0)
+                    {
+                        newMaxY += exactSteps;
+                        count++;
+                    }
+                    newMaxY = exactSteps * count;
+
+                    // wenn minY sich geändert hat, steps nochmal berechnen
+                    // wenn nicht, fertig
+                    if (newMaxY == maxY)
+                    {
+                        adjusting = false;
+                    } else
+                    {
+                        maxY = newMaxY;
+                    }
                 }
+
+                newMinY = newMaxY - (numVerticalLabels - 1) * exactSteps;
+            }
+            else if(minY <= 0 && maxY >= 0)
+            {
+                newMaxY = humanRound(maxY, true);
+                newMinY = -humanRound(-minY, true);
+                exactSteps = (newMaxY - newMinY) / (numVerticalLabels - 1);
             }
         }
 
-        double newMaxY = newMinY + (numVerticalLabels - 1) * exactSteps;
         mGraphView.getViewport().setMinY(newMinY);
         mGraphView.getViewport().setMaxY(newMaxY);
 
@@ -647,6 +692,7 @@ public class GridLabelRenderer {
             mStepsVertical.put(p, v);
             p += pixelStep;
             v -= exactSteps;
+            adjustLabelVerticalSize(v);
         }
 
         return true;
@@ -832,6 +878,45 @@ public class GridLabelRenderer {
      * label size
      * @param canvas canvas
      */
+    protected void adjustLabelVerticalSize(double value) {
+
+        String label = mLabelFormatter.formatLabel(value, false);
+        if (mLabelVerticalNumChars != null && (label == null || label.length() <= mLabelVerticalNumChars))
+            return;
+
+        mLabelVerticalNumChars = label.length();
+
+        Rect textBounds = new Rect();
+        mPaintLabel.getTextBounds(label, 0, label.length(), textBounds);
+
+        //do width
+        int width = textBounds.width();
+        // add some pixel to get a margin
+        width += 6;
+        // space between text and graph content
+        width += mStyles.labelsSpace;
+
+        if(mLabelVerticalWidth == null || width > mLabelVerticalWidth)
+            mLabelVerticalWidth = width;
+
+        //do height
+        int height = textBounds.height();
+        // multiline
+        int lines = 1;
+        for (byte c : label.getBytes()) {
+            if (c == '\n') lines++;
+        }
+        height *= lines;
+
+        if(mLabelVerticalHeight == null || height > mLabelVerticalHeight)
+            mLabelVerticalHeight = height;
+    }
+
+    /**
+     * calculates the vertical second scale
+     * label size
+     * @param canvas canvas
+     */
     protected void calcLabelVerticalSecondScaleSize(Canvas canvas) {
         if (mGraphView.mSecondScale == null) {
             mLabelVerticalSecondScaleWidth = 0;
@@ -853,6 +938,44 @@ public class GridLabelRenderer {
             if (c == '\n') lines++;
         }
         mLabelVerticalSecondScaleHeight *= lines;
+    }
+
+    /**
+     * calculates the vertical label size
+     * @param value the new label according to which to adjust the label size
+     */
+    protected void adjustLabelVerticalSecondScaleSize(double value) {
+
+        String label = mLabelFormatter.formatLabel(value, false);
+        if (mLabelVerticalSecondScaleNumChars != null && (label == null || label.length() <= mLabelVerticalSecondScaleNumChars))
+            return;
+
+        mLabelVerticalSecondScaleNumChars = label.length();
+
+        Rect textBounds = new Rect();
+        mPaintLabel.getTextBounds(label, 0, label.length(), textBounds);
+
+        //do width
+        int width = textBounds.width();
+        // add some pixel to get a margin
+        width += 6;
+        // space between text and graph content
+        width += mStyles.labelsSpace;
+
+        if(mLabelVerticalSecondScaleWidth == null || width > mLabelVerticalSecondScaleWidth)
+            mLabelVerticalSecondScaleWidth = width;
+
+        //do height
+        int height = textBounds.height();
+        // multiline
+        int lines = 1;
+        for (byte c : label.getBytes()) {
+            if (c == '\n') lines++;
+        }
+        height *= lines;
+
+        if(mLabelVerticalSecondScaleHeight == null || height > mLabelVerticalSecondScaleHeight)
+            mLabelVerticalSecondScaleHeight = height;
     }
 
     /**
@@ -908,10 +1031,10 @@ public class GridLabelRenderer {
             calcLabelHorizontalSize(canvas);
             labelSizeChanged = true;
         }
-        if (mLabelVerticalWidth == null) {
-            calcLabelVerticalSize(canvas);
-            labelSizeChanged = true;
-        }
+//        if (mLabelVerticalWidth == null) {
+//            calcLabelVerticalSize(canvas);
+//            labelSizeChanged = true;
+//        }
         if (mLabelVerticalSecondScaleWidth == null) {
             calcLabelVerticalSecondScaleSize(canvas);
             labelSizeChanged = true;
@@ -1171,6 +1294,10 @@ public class GridLabelRenderer {
      * @return the rounded number
      */
     protected double humanRound(double in, boolean roundAlwaysUp) {
+
+        if(in == 0)
+            return in;
+
         // round-up to 1-steps, 2-steps or 5-steps
         int ten = 0;
         while (Math.abs(in) >= 10d) {
