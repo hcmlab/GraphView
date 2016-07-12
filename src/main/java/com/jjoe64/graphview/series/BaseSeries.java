@@ -20,7 +20,6 @@
 package com.jjoe64.graphview.series;
 
 import android.graphics.PointF;
-import android.util.Log;
 
 import com.jjoe64.graphview.GraphView;
 
@@ -30,7 +29,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
-import java.util.Set;
 
 /**
  * Basis implementation for series.
@@ -405,10 +403,10 @@ public abstract class BaseSeries<E extends DataPointInterface> implements Series
         // update linked graph views
         // update graphview
         for (GraphView gv : mGraphViews) {
-            gv.onDataChanged(keepLabels, scrollToEnd);
             if (scrollToEnd) {
                 gv.getViewport().scrollToEnd();
             }
+            gv.onDataChanged(keepLabels, !scrollToEnd);
         }
     }
 
